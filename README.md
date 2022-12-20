@@ -8,7 +8,7 @@ A personal project to improve my data analysis skills in R using dataset from [#
 
 
 ## Malaria in Africa Map
-![Malaria in Africa Map](CopyOfmalariamap.gif)
+![Malaria in Africa Map](Malaria-map.png)
 
 ## Retail Sales in the USA
-![Retail sales in the USA](CopyOfretailsales.png)
+![Retail sales in the USA](retailsales.png)
