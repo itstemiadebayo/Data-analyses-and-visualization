@@ -1,0 +1,226 @@
+---
+title: "Malaria - TidyTuesday"
+Name: "Temi Adebayo"
+date: "2022-12-14"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Code along with David Robinson for Tidy Tuesday Screen cast - Malaria
+
+```{r message=FALSE, warning=FALSE}
+#load packages
+library(tidytuesdayR)
+library(tidyverse)
+library(ggplot2)
+library(malariaAtlas)
+
+#set theme
+theme_set(theme_light())
+```
+
+```{r message=FALSE, warning=FALSE}
+#list of countries in the dataset
+malariaAtlas::listData("pr points")
+
+#extract data for only Nigeria and exclude na
+data.ken <- as_tibble(malariaAtlas::getPR(ISO = "KEN", species = "BOTH")) %>%
+  filter(!is.na(pr))
+class(data.ken)
+head(data.ken)
+summary(data.ken)
+sum(data.ken$positive)
+```
+
+```{r message=FALSE, warning=FALSE}
+data.ken %>%
+  arrange(year_start)%>%
+  View()
+
+data.ken %>%
+  arrange(year_start)%>%
+  count(method, sort=TRUE)%>%
+  View()
+
+  #Microscopy was mostly used for testing
+
+data.ken %>%
+  count(year_start)%>%
+  View()
+#data runs from 1985 - 2015
+
+#What's the prevalence of malaria during this period
+data.ken %>%
+  group_by(year_start)%>%
+  summarize(examined = sum(examined),
+            positive = sum(positive),
+            studies = n())%>%
+  mutate(pr = positive / examined) %>%
+  ggplot(aes(year_start,pr))+
+  geom_line()
+
+#Map the data using world map
+data.ken %>%
+  mutate(decade = 10 * (year_start %/% 10)) %>%
+  arrange(pr) %>%
+  ggplot(aes(longitude,latitude,color = pr))+
+  borders("world", regions = "Kenya")+
+  geom_point()+
+  scale_color_gradient2(low = "green",midpoint = .5,high="red", labels = scales::percent_format())+
+  facet_wrap(~decade)
+  theme_void()
+  
+```
+
+### Malaria incidence over time
+
+
+```{r message=FALSE, warning=FALSE}
+#Malaria incidence
+mal_inc <- read.csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/362fa86c328797428736f05c22af5eca3a27b731/data/2018/2018-11-13/malaria_inc.csv")
+
+mal_inc_clean <- mal_inc %>%
+  setNames(c("country","code","year","incidence"))%>%
+  filter(country != "Turkey",
+         !is.na(code))%>%
+  mutate(incidence = incidence /1000)
+```
+
+```{r}
+#use six random countries
+mal_inc_clean %>%
+  filter(country %in% sample(unique(country),6))%>%
+  ggplot(aes(year, incidence, color= country))+
+  geom_line()+
+  scale_y_continuous(labels = scales::percent_format())
+```
+
+```{r}
+mal_inc_spread <- mal_inc_clean %>%
+  mutate(year = paste0("Y",year))%>%
+  spread(year, incidence)
+
+mal_inc_spread %>%
+  mutate(current = Y2015,
+         change = Y2015 - Y2000) %>%
+  ggplot(aes(current, change))+
+  geom_point()+
+  geom_text(aes(label = code), vjust = 1, hjust = 1)
+```
+
+```{r}
+world <- map_data("world")%>%
+  filter(region != "Antarctica")
+
+mal_inc_clean %>%
+  filter(incidence < 1) %>%
+  inner_join(maps::iso3166 %>%
+               select(a3,mapname),by = c(code = "a3")) %>%
+  inner_join(world, by= c(mapname = "region")) %>%
+  ggplot(aes(long, lat, group = group, fill = incidence))+
+  geom_polygon()+
+  scale_fill_gradient2(low = "blue", high = "red", midpoint = .20, labels = scales::percent_format())+
+  facet_wrap(~year)+
+  theme_void()+
+  labs(title = "Global malaria incidence 2000 - 2015")
+```
+
+
+### Malaria death over time
+
+
+```{r message=FALSE, warning=FALSE}
+#Malaria deaths
+mal_death <- read.csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/362fa86c328797428736f05c22af5eca3a27b731/data/2018/2018-11-13/malaria_deaths.csv")
+
+mal_death_clean <- mal_death %>%
+  setNames(c("country","code","year","death"))
+```
+
+```{r}
+#use six random countries
+mal_death_clean %>%
+  filter(country %in% sample(unique(country),6))%>%
+  ggplot(aes(year, death, color= country))+
+  geom_line()+
+  labs(y = "Deaths per 100,000")
+```
+
+
+```{r message=FALSE, warning=FALSE}
+library(stringr)
+
+
+map_death_country <- mal_death_clean %>%
+  inner_join(maps::iso3166 %>%
+               select(a3,mapname),by = c(code = "a3")) %>%
+  mutate(mapname = str_remove(mapname, "\\(.*"))
+
+mal_death_map <- map_data("world")%>%
+  filter(region != "Antarctica")%>%
+  tbl_df() %>%
+  inner_join(map_death_country, by= c(region = "mapname")) 
+
+mal_death_map%>%
+  ggplot(aes(long, lat, group = group, fill = death))+
+  geom_polygon()+
+  scale_fill_gradient2(low = "blue", high = "red", midpoint = 100)+
+  theme_void()+
+  labs(title = "Malaria mortality over time around the world", fill = "Deaths per 100,000")
+```
+
+```{r message=FALSE, warning=FALSE}
+#create map for Africa
+
+
+world <- map_data("world")
+africa <- subset(world, region %in% c("Algeria","Angola","Benin","Botswana","Burkina Faso","Burundi","Cabo Verde","Cameroon","Central African Republic","Chad","Comoros","Democratic Republic of the Congo","Republic of Congo","Ivory Coast","Djibouti","Egypt","Equatorial Guinea","Eritrea","Swaziland","Ethiopia","Gabon","Gambia","Ghana","Guinea","Guinea-Bissau","Kenya","Lesotho","Liberia","Libya","Madagascar","Malawi","Mali","Mauritania","Mauritius","Morocco","Mozambique","Namibia","Niger","Nigeria","Rwanda","Sao Tome and Principe","Senegal","Seychelles","Sierra Leone","Somalia","South Africa","South Sudan","Sudan","Tanzania","Togo","Tunisia","Uganda","Zambia","Zimbabwe"))
+
+map_death_country <- mal_death_clean %>%
+  inner_join(maps::iso3166 %>%
+               select(a3,mapname),by = c(code = "a3")) %>%
+  mutate(mapname = str_remove(mapname, "\\(.*"))
+
+mal_death_map <- map_data("world")%>%
+  filter(region != "Antarctica")%>%
+  tbl_df() %>%
+  inner_join(map_death_country, by= c(region = "mapname")) 
+
+map<-mal_death_map%>%
+  ggplot(aes(long, lat, group = group, fill = death))+
+  geom_polygon()+
+  scale_fill_gradient2(low = "blue", high = "red", midpoint = 100)+
+  theme_void()+
+  labs(title = "Global malaria mortality, 2000 - 2015", fill = "Deaths per 100,000")+
+  theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 60),
+        legend.position = "bottom",legend.key.width = unit(4,"cm"), legend.key.height = unit(2,"cm"),
+        legend.text =element_text(hjust = 0.5, face = "bold", size = 50),
+        legend.title = element_text(hjust = 0.5, face = "bold", size = 50))
+
+map
+```
+
+```{r message=FALSE, warning=FALSE}
+#Animate the map
+library(gganimate)
+library(countrycode)
+library(png)
+library(gifski)
+
+mal_death_map %>%
+  mutate(continent = countrycode(code,"iso3c", "continent")) %>%
+  filter(continent == "Africa") %>%
+  ggplot(aes(long, lat, group, fill = death))+
+  geom_polygon()+
+  scale_fill_gradient2(low = "blue", high = "red", midpoint = 100)+
+  theme_void()+
+  labs(title = "Malaria mortality in Africa, 2000 - 2015", fill = "Deaths per 100,000")+
+  transition_manual(year)
+anim_save("~/Github Projects/Malaria/malaria_map.gif") 
+```
+## The map is distorted and I have gotten around to fix it yet.
