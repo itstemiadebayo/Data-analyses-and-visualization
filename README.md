@@ -3,12 +3,12 @@ A personal project to improve my data analysis skills in R using dataset from [#
 
 ## Gallery
 
-* [Malaria in Africa Map](#animated-malaria-map)
+* [Global Malaria Mortality Map](#animated-malaria-map)
 * [Retail sales in the USA](#retail-sales-graph)
 
 
-## Malaria in Africa Map
-![Malaria in Africa Map](Malaria-map.png)
+## Global Malaria Mortality Map
+![Global Malaria Mortality Map](Malaria-map.png)
 
 ## Retail Sales in the USA
 ![Retail sales in the USA](retailsales.png)
