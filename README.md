@@ -11,4 +11,4 @@ A personal project to improve my data analysis skills in R using dataset from [#
 ![Global Malaria Mortality Map](Malaria-map.png)
 
 ## Retail Sales in the USA
-![Retail sales in the USA](retailsales.png)
+![Retail sales in the USA](retail.2.png)
