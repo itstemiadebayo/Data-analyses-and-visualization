@@ -1,0 +1,146 @@
+---
+title: "Survival Analysis of BCG Vaccination"
+author: Temi Adebayo
+output: html_document
+date: "2022-12-28"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+In rural Guinea-Bissau, 5274 children under 7 months of age were visited two times at home with an interval of six months (Kristensen et al., BMJ, 2000). Information about vaccination (BCG, DTP, measles vaccine) was collected at each visit, and at the second visit, death during follow-up was registered. Some children moved away during follow-up, some survived until the next visit. The following variables are found in the data set bissau.dta:
+
+- id: id number 
+- fuptime: follow-up time in days
+- dead: 0 = censored, 1 = dead
+- bcg: 1 = Yes, 0 = No
+- dtp: number of DTP doses (0, 1, 2, 3)
+- age: age at first visit in days
+
+```{r message=FALSE, warning=FALSE}
+library(haven)
+library(survival)
+library(survminer)
+library(ggplot2)
+library(tidyr)
+library(MASS)
+library(mice)
+library(extrafont)
+
+load("~/.RData")
+#bissau_data <- read_dta("Github Projects/Data-analysis-and-visualization/Survival analysis/bissau.dta")
+#View(bissau_data)
+
+font_import()
+loadfonts(device = "win")
+windowsFonts()
+
+#Use google and awesome font for title, subtitles, and other texts
+
+# font for the title 
+sysfonts::font_add_google("Archivo Narrow","Archivo Narrow", bold.wt=600)
+
+# font for the subtitle, caption, etc.
+sysfonts::font_add_google("Roboto Condensed","Roboto Condensed", bold.wt=700)
+sysfonts::font_add(family = "Font Awesome 5 Brands Regular", regular= "~/Data Visualization/Fonts-Awesome/otfs/Font Awesome 5 Brands-Regular-400.otf")
+sysfonts::font_add(family = "Font Awesome 5 Free Solid", regular = "~/Data Visualization/Fonts-Awesome/otfs/Font Awesome 5 Free-Solid-900.otf")
+
+showtext::showtext_auto()
+showtext::showtext_opts(dpi = 300)
+
+```
+
+
+```{r}
+
+#categorize age(in days) into groups
+max(bissau_data$age) #oldest is 7.1 months old
+hist(bissau_data$fuptime, xlab = "Length of follow up time", main = "Histogram of follow up time in BCG vaccicnated children")
+bissau_data$agegrp <- cut(bissau_data$age, 
+                          breaks = c(0,90,Inf),
+                          labels = c("<=3 months",">3 months"), include.lowest = TRUE)
+```
+
+```{r message=FALSE, warning=FALSE, dpi = 300}
+#specify first null model where fuptime is time to event,
+#dead is censored variable
+km_fit1 <- survfit(Surv(fuptime, dead)~ bcg,
+                   data = bissau_data, type = "kaplan-meier")
+print(km_fit1)
+summary(km_fit1)$table
+#str(km_fit1)
+
+#plot cummulative survival rate(probabilities)
+plot(km_fit1)
+ggsurvplot(km_fit1, data = bissau_data, risk.table = T, conf.int = T, ggtheme = theme_minimal())
+
+#plot(km_fit1, mark.time = FALSE)
+ggsurvplot(km_fit1,fun = "cumhaz",pval = T,conf.int = T, 
+           ggtheme = theme_classic2(base_size = 14),
+           risk.table = "abs_pct", risk.table.y.text.col = T,risk.table.y.text = FALSE, ncensor.plot = TRUE,
+           title= "Nelson-Aalen cumulative hazard esimator" ,
+           xlab = "Time in Days", conf.int.style= "step",
+           data = bissau_data)
+
+
+summary(km_fit1, times = c(30*(1:10)))
+
+```
+
+### It is difficult to evaluate the effect of BCG vaccination from the Kaplan-Meier plot because of the scale. However, the effect is much evident using the Nelson-Aalen plot
+
+```{r , dpi = 300}
+#Nelson-Aelen estimator
+#cumsum(km_fit1$n.event/km_fit1$n.risk)
+#plot(cumsum(km_fit1$n.event/km_fit1$n.risk))
+#-log(km_fit1$surv)
+
+#Nelson-Aelen
+ne_fit1 <- summary(survfit(Surv(fuptime, dead)~ 1,
+                   data = bissau_data, type="fleming-harrington"))
+#print(ne_fit1)
+#plot(ne_fit1,conf.int = F, data = bissau_data)
+
+#list(ne_fit1$time, -log(ne_fit1$surv))
+
+```
+
+```{r message=FALSE, warning=FALSE, dpi = 300}
+km_fit2 <- survfit(Surv(fuptime, dead)~ bcg+agegrp,
+                   data = bissau_data, type = "kaplan-meier")
+print(km_fit2)
+summary(km_fit2, times = c(30*(1:10)))
+
+ggsurvplot(km_fit2, data = bissau_data, risk.table = T, conf.int = T,pval = T,pval.method = T, ggtheme = theme_minimal())
+
+#run cox regression
+cox_reg1 <- coxph(Surv(fuptime, dead)~ bcg,
+                  data=bissau_data)
+summary(cox_reg1)
+exp(-0.2821)
+
+```
+### The coefficient is the hazard ratio: which is the ratio between the hazard for vaccinated children (bcg =1) and the non-vaccinated children (bcg = 0). The hazard ratio is 0.75 (95% CI 0.58-0.98) and it is significantly different from 1.
+
+```{r message=FALSE, warning=FALSE, , dpi = 300}
+#run cox regression
+cox_reg2 <- coxph(Surv(fuptime, dead)~ bcg+agegrp+dtp,
+                  data=bissau_data)
+summary(cox_reg2)
+
+anova(cox_reg1,cox_reg2)
+
+#proportional hazard assumption test
+test.ph <- cox.zph(cox_reg2)
+test.ph
+
+#Global Schoenfeld Test: 0.166
+ggcoxzph(test.ph)
+
+```
+
+The adjusted effect of vaccination is 0.66% (95% CI 0.48 - 0.92). There is a strong confounding effect of DTP and age.
+
+The proportional hazard assumption seems to be valid. Additivity of effects could be tested by adding interaction between covariates. In this model the effects of covariates are not assumed to be linear - indeed a different coeffecient is estimated for each level of dtp and age is treated as a categorical variable.
